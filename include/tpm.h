@@ -108,6 +108,17 @@ static TPM2B_PUBLIC MakeRSAStoragePrimaryTemplate() {
 bool ConnectTPM(Args &args, std::string tctiConf, TctiCtx &tcti, EsysCtx &esys);
 
 /**
+ * Starts an authorization session with the TPM.
+ *
+ * @param args The command line arguments.
+ * @param esys The EsysCtx structure used to communicate with the TPM.
+ * @param session_handle Output parameter that receives the ESYS_TR session
+ * handle.
+ * @returns True if the session is started successfully, false otherwise.
+ */
+bool TPMStartAuth(Args &args, EsysCtx &esys, ESYS_TR &sessionHandle);
+
+/**
  * Connects to the TPM and performs a startup operation.
  *
  * @param args The command line arguments.
@@ -124,6 +135,7 @@ bool TPMStartup(Args &args, EsysCtx &esys);
  * @param primaryHandle The handle of the created primary key.
  * @return True if key creation is successful, false otherwise.
  */
-bool TPMCreatePrimary(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle);
+bool TPMCreatePrimary(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle,
+                      ESYS_TR sessionHandle = ESYS_TR_PASSWORD);
 
 #endif // TPM_H_

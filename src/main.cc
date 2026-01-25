@@ -48,17 +48,29 @@ int main(int argc, char *argv[]) {
   bool _ = TPMStartup(args, esys);
   PauseIfNeeded(args.autoMode);
 
-  header(4, kTotalSteps, "CreatePrimary (Owner Hierarchy)");
-  ESYS_TR primaryHandle;
-  if (!TPMCreatePrimary(args, esys, primaryHandle))
+  header(4, kTotalSteps, "Start HMAC Auth Session");
+  ESYS_TR sessionHandle;
+  if (!TPMStartAuth(args, esys, sessionHandle))
     return 1;
   PauseIfNeeded(args.autoMode);
 
-  header(5, kTotalSteps, "Cleanup (FlushContext)");
+  header(5, kTotalSteps, "CreatePrimary authorized by HMAC session");
+  ESYS_TR primaryHandle;
+  if (!TPMCreatePrimary(args, esys, primaryHandle, sessionHandle))
+    return 1;
+  PauseIfNeeded(args.autoMode);
+
+  header(6, kTotalSteps, "Cleanup (FlushContext)");
   if (!CheckRC(Esys_FlushContext(esys.ctx, primaryHandle),
                "Flust Context (Primary)"))
     return 1;
+
+  if (!CheckRC(Esys_FlushContext(esys.ctx, sessionHandle),
+               "Flust Context (Primary)"))
+    return 1;
   ok("Flused Primary Handle");
+
+  PauseIfNeeded(args.autoMode);
 
   return 0;
 }

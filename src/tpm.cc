@@ -1,7 +1,9 @@
 #include "tpm.h"
+#include "tss2_tpm2_types.h"
 #include "ui.h"
+#include <cstring>
 
-bool TPMCreatePrimary(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle) {
+bool TPMStartAuth(Args &args, EsysCtx &esys, ESYS_TR &sessionHandle) {
   TPM2B_AUTH ownerAuth{};
   ownerAuth.size = 0;
   if (!CheckRC(Esys_TR_SetAuth(esys.ctx, ESYS_TR_RH_OWNER, &ownerAuth),
@@ -9,6 +11,56 @@ bool TPMCreatePrimary(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle) {
     return false;
   ok("Owner Hierarchy Auth Set (empty)");
 
+  TPM2B_NONCE nonceCaller{};
+  {
+    TPM2B_DIGEST *rnd = nullptr;
+    if (!CheckRC(Esys_GetRandom(esys.ctx, ESYS_TR_NONE, ESYS_TR_NONE,
+                                ESYS_TR_NONE, 17, &rnd),
+                 "GetRandom"))
+      return false;
+
+    nonceCaller.size = rnd->size;
+    std::memcpy(nonceCaller.buffer, rnd->buffer, rnd->size);
+    Esys_Free(rnd);
+
+    ok("Generated nonceCaller (16 bytes) using TPM RNG");
+  }
+
+  TPMT_SYM_DEF symmetric{};
+  symmetric.algorithm = TPM2_ALG_NULL;
+
+  sessionHandle = ESYS_TR_NONE;
+  if (!CheckRC(Esys_StartAuthSession(esys.ctx, ESYS_TR_NONE, ESYS_TR_NONE,
+                                     ESYS_TR_NONE, ESYS_TR_NONE, ESYS_TR_NONE,
+                                     &nonceCaller, TPM2_SE_HMAC, &symmetric,
+                                     TPM2_ALG_SHA256, &sessionHandle),
+               "StartAuthSession"))
+    return false;
+
+  ok("HMAC Session Started");
+
+  TPMA_SESSION sessAttrs = TPMA_SESSION_CONTINUESESSION;
+  TPMA_SESSION sessAttrsMask = TPMA_SESSION_CONTINUESESSION;
+
+  if (!CheckRC(Esys_TRSess_SetAttributes(esys.ctx, sessionHandle, sessAttrs,
+                                         sessAttrsMask),
+               "Session Set Attributes"))
+    return false;
+
+  {
+    std::ostringstream h;
+    h << "0x" << std::hex << sessionHandle << std::dec;
+    kv("Session Handle: ", h.str());
+  }
+  kv("Auth Hash: ", "SHA256");
+  kv("Symmetric", "NULL (no param encryption yet)");
+  kv("Attrs", "continueSession");
+
+  return true;
+}
+
+bool TPMCreatePrimary(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle,
+                      ESYS_TR sessionHandle) {
   TPM2B_SENSITIVE_CREATE inSensitive{};
   inSensitive.size = 0;
   inSensitive.sensitive.userAuth.size = 0;
@@ -28,7 +80,7 @@ bool TPMCreatePrimary(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle) {
   TPM2B_DIGEST *creationHash = nullptr;
   TPMT_TK_CREATION *creationTicket = nullptr;
 
-  if (!CheckRC(Esys_CreatePrimary(esys.ctx, ESYS_TR_RH_OWNER, ESYS_TR_PASSWORD,
+  if (!CheckRC(Esys_CreatePrimary(esys.ctx, ESYS_TR_RH_OWNER, sessionHandle,
                                   ESYS_TR_NONE, ESYS_TR_NONE, &inSensitive,
                                   &inPublic, &outsideInfo, &creationPCR,
                                   &primaryHandle, &outPublic, &creationData,
