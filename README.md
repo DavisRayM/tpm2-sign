@@ -1,5 +1,7 @@
 # TPMSign
 
+[Blog Post](https://davisraym.com/blog/tpm-startup-and-provisioning)
+
 TPMSign is a small C++ demo tool that takes a user-supplied string and produces a TPM-backed RSA signature using a TPM 2.0 device.
 
 It uses the [tpm2-tss](https://github.com/tpm2-software/tpm2-tss) ESAPI to:
