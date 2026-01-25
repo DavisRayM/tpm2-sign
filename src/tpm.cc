@@ -2,6 +2,7 @@
 #include "tss2_tpm2_types.h"
 #include "ui.h"
 #include <cstring>
+#include <print>
 
 bool TPMStartAuth(Args &args, EsysCtx &esys, ESYS_TR &sessionHandle) {
   TPM2B_AUTH ownerAuth{};
@@ -197,6 +198,48 @@ bool TPMCreateLoad(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle,
   Esys_Free(outCreationData);
   Esys_Free(outCreationHash);
   Esys_Free(outCreationTicket);
+
+  return true;
+}
+
+bool TPMSignMessage(Args &args, EsysCtx &esys, ESYS_TR &childHandle,
+                    ESYS_TR &sessionHandle) {
+  TPM2B_DIGEST digest = SHA256ToTPMDigest(args.message);
+  ok("SHA-256 Computed for Message");
+  kv("Digest Size: ", std::to_string(digest.size));
+  std::println(stdout, "{}Digest:{}", CYAN, RESET);
+  PrintHex(digest.buffer, digest.size);
+
+  TPMT_SIG_SCHEME scheme{};
+  scheme.scheme = TPM2_ALG_RSASSA;
+  scheme.details.rsassa.hashAlg = TPM2_ALG_SHA256;
+
+  TPMT_TK_HASHCHECK validation{};
+  validation.tag = TPM2_ST_HASHCHECK;
+  validation.hierarchy = TPM2_RH_NULL;
+  validation.digest.size = 0;
+
+  TPMT_SIGNATURE *signature = nullptr;
+  if (!CheckRC(Esys_Sign(esys.ctx, childHandle, sessionHandle, ESYS_TR_NONE,
+                         ESYS_TR_NONE, &digest, &scheme, &validation,
+                         &signature),
+               "Sign"))
+    return false;
+  ok("TPM2_Sign Success");
+
+  if (signature) {
+    kv("Signature Algorithm: ", TPMAlgToString(signature->sigAlg));
+    if (signature->sigAlg == TPM2_ALG_RSASSA) {
+      const TPM2B_PUBLIC_KEY_RSA &sig = signature->signature.rsassa.sig;
+      kv("Signature Size", std::to_string(sig.size));
+      std::println(stdout, "{}Signature:{}", CYAN, RESET);
+      PrintHex(sig.buffer, sig.size);
+    } else {
+      warn("Signature print not implemented");
+    }
+
+    Esys_Free(signature);
+  }
 
   return true;
 }

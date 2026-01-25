@@ -2,6 +2,8 @@
 #define TPM_H_
 #include "tss2_tpm2_types.h"
 #include "ui.h"
+#include <cstring>
+#include <openssl/sha.h>
 #include <tss2/tss2_esys.h>
 #include <tss2/tss2_rc.h>
 #include <tss2/tss2_tctildr.h>
@@ -57,6 +59,19 @@ static bool CheckRC(TSS2_RC rc, const char *what) {
     return false;
   }
   return true;
+}
+
+/**
+ *  Converts a SHA256 to a TPMDigest
+ */
+static TPM2B_DIGEST SHA256ToTPMDigest(const std::string &msg) {
+  unsigned char hash[SHA256_DIGEST_LENGTH];
+  SHA256(reinterpret_cast<const unsigned char *>(msg.data()), msg.size(), hash);
+
+  TPM2B_DIGEST d{};
+  d.size = SHA256_DIGEST_LENGTH;
+  std::memcpy(d.buffer, hash, SHA256_DIGEST_LENGTH);
+  return d;
 }
 
 /**
@@ -219,4 +234,20 @@ bool TPMCreatePrimary(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle,
  */
 bool TPMCreateLoad(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle,
                    ESYS_TR sessionHandle, ESYS_TR &childHandle);
+
+/**
+ * Signs the message given by the user in command line arguments.
+ *
+ * @param args           Command line arguments describing the child key
+ *                       configuration and behavior.
+ * @param esys           EsysCtx structure providing the ESAPI context used
+ *                       to talk to the TPM.
+ * @param childHandle    The handle of the loaded child signing key.
+ * @param sessionHandle  Authorization session handle used to authorize Sign.
+ *
+ * @return true if the message is signed successfully; false if any error occurs
+ *         during signing.
+ */
+bool TPMSignMessage(Args &args, EsysCtx &esys, ESYS_TR &childHandle,
+                    ESYS_TR &sessionHandle);
 #endif // TPM_H_

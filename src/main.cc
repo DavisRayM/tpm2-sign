@@ -67,19 +67,26 @@ int main(int argc, char *argv[]) {
     return 1;
   PauseIfNeeded(args.autoMode);
 
+  header(7, kTotalSteps, "Signing Message");
+  if (!TPMSignMessage(args, esys, childHandle, sessionHandle))
+    return 1;
+  PauseIfNeeded(args.autoMode);
+
   header(7, kTotalSteps, "Cleanup (Flush Context)");
   if (!CheckRC(Esys_FlushContext(esys.ctx, childHandle),
                "Flust Context (Child)"))
     return 1;
+  ok("Flused Child Handle");
 
   if (!CheckRC(Esys_FlushContext(esys.ctx, primaryHandle),
                "Flust Context (Primary)"))
     return 1;
+  ok("Flused Primary Handle");
 
   if (!CheckRC(Esys_FlushContext(esys.ctx, sessionHandle),
                "Flust Context (Primary)"))
     return 1;
-  ok("Flused Primary Handle");
+  ok("Flused Session Handle");
 
   return 0;
 }

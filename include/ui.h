@@ -2,6 +2,7 @@
 #define UI_H
 
 #include "tss2_tpm2_types.h"
+#include <cstdio>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -72,6 +73,12 @@ inline std::string TPMAlgToString(TPM2_ALG_ID alg) {
     oss << "ALG(0x" << std::hex << alg << std::dec << ")";
     return oss.str();
   }
+}
+
+inline void PrintHex(const unsigned char *p, size_t n) {
+  for (size_t i = 0; i < n; i++)
+    std::printf("%02x", p[i]);
+  std::printf("\n");
 }
 
 inline std::string TPMAObjectToString(TPMA_OBJECT attrs) {
