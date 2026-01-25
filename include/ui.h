@@ -6,6 +6,14 @@
 #include <sstream>
 #include <string>
 
+/**
+ * Command-line arguments for the CLI
+ */
+struct Args {
+  bool autoMode = false; ///< Flag indicating if auto mode is active
+  std::string message;   ///< Message to be processed
+};
+
 // ANSI colors (works on most terminals; safe-ish fallback if unsupported)
 constexpr const char *RESET = "\x1b[0m";
 constexpr const char *BOLD = "\x1b[1m";

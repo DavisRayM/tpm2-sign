@@ -28,6 +28,7 @@ add_subdirectory(include)
 target_sources(tpm-sign
   PRIVATE
     src/main.cc
+    src/tpm.cc
 )
 target_include_directories(tpm-sign
   PRIVATE
