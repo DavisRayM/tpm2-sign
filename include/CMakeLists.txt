@@ -6,4 +6,5 @@ target_sources(TpmSignLib
   TYPE HEADERS
   FILES
     ui.h
+    tpm.h
 )

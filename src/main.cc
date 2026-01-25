@@ -1,5 +1,8 @@
+#include "tpm.h"
+#include "tss2_tpm2_types.h"
 #include "ui.h"
 #include <cstring>
+#include <ios>
 #include <print>
 #include <string>
 #include <tss2/tss2_esys.h>
@@ -84,6 +87,25 @@ static bool ConnectTPM(Args &args, std::string tctiConf, TctiCtx &tcti,
                        EsysCtx &esys);
 
 /**
+ * Connects to the TPM and performs a startup operation.
+ *
+ * @param args The command line arguments.
+ * @param esys The EsysCtx structure to initialize.
+ * @return True if TPM startup is successful, false otherwise.
+ */
+static bool TPMStartup(Args &args, EsysCtx &esys);
+
+/**
+ * Creates a primary key in the TPM under the Owner Hierarchy.
+ *
+ * @param args The command line arguments.
+ * @param esys The EsysCtx structure to use for the operation.
+ * @param primaryHandle The handle of the created primary key.
+ * @return True if key creation is successful, false otherwise.
+ */
+static bool TPMCreatePrimary(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle);
+
+/**
  * Checks the TPM2 return code and reports if an error occurred.
  *
  * @param rc The return code to check.
@@ -108,7 +130,98 @@ int main(int argc, char *argv[]) {
     return 1;
   PauseIfNeeded(args.autoMode);
 
+  bool _ = TPMStartup(args, esys);
+  PauseIfNeeded(args.autoMode);
+
+  ESYS_TR primaryHandle;
+  if (!TPMCreatePrimary(args, esys, primaryHandle))
+    return 1;
+  PauseIfNeeded(args.autoMode);
+
+  header(5, kTotalSteps, "Cleanup (FlushContext)");
+  if (!CheckRC(Esys_FlushContext(esys.ctx, primaryHandle),
+               "Flust Context (Primary)"))
+    return 1;
+  ok("Flused Primary Handle");
+
   return 0;
+}
+
+static bool TPMCreatePrimary(Args &args, EsysCtx &esys,
+                             ESYS_TR &primaryHandle) {
+  header(4, kTotalSteps, "CreatePrimary (Owner Hierarchy)");
+  TPM2B_AUTH ownerAuth{};
+  ownerAuth.size = 0;
+  if (!CheckRC(Esys_TR_SetAuth(esys.ctx, ESYS_TR_RH_OWNER, &ownerAuth),
+               "SetAuth"))
+    return false;
+  ok("Owner Hierarchy Auth Set (empty)");
+
+  TPM2B_SENSITIVE_CREATE inSensitive{};
+  inSensitive.size = 0;
+  inSensitive.sensitive.userAuth.size = 0;
+  inSensitive.sensitive.data.size = 0;
+
+  TPM2B_PUBLIC inPublic = MakeRSAStoragePrimaryTemplate();
+
+  TPM2B_DATA outsideInfo{};
+  outsideInfo.size = 0;
+
+  TPML_PCR_SELECTION creationPCR{};
+  creationPCR.count = 0;
+
+  primaryHandle = ESYS_TR_NONE;
+  TPM2B_PUBLIC *outPublic = nullptr;
+  TPM2B_CREATION_DATA *creationData = nullptr;
+  TPM2B_DIGEST *creationHash = nullptr;
+  TPMT_TK_CREATION *creationTicket = nullptr;
+
+  if (!CheckRC(Esys_CreatePrimary(esys.ctx, ESYS_TR_RH_OWNER, ESYS_TR_PASSWORD,
+                                  ESYS_TR_NONE, ESYS_TR_NONE, &inSensitive,
+                                  &inPublic, &outsideInfo, &creationPCR,
+                                  &primaryHandle, &outPublic, &creationData,
+                                  &creationHash, &creationTicket),
+               "CreatePrimary"))
+    return false;
+
+  ok("TPM2_CC_CreatePrimary Sucess");
+  {
+    std::ostringstream h;
+    h << "0x" << std::hex << primaryHandle << std::dec;
+    kv("Primary Handle: ", h.str());
+  }
+  if (outPublic) {
+    kv("type", TPMAlgToString(outPublic->publicArea.type));
+    kv("nameAlg", TPMAlgToString(outPublic->publicArea.nameAlg));
+    kv("attributes",
+       TPMAObjectToString(outPublic->publicArea.objectAttributes));
+
+    if (outPublic->publicArea.type == TPM2_ALG_RSA) {
+      kv("RSA bits",
+         std::to_string(outPublic->publicArea.parameters.rsaDetail.keyBits));
+      kv("RSA exponent",
+         std::to_string(outPublic->publicArea.parameters.rsaDetail.exponent));
+    }
+  }
+
+  Esys_Free(outPublic);
+  Esys_Free(creationData);
+  Esys_Free(creationHash);
+  Esys_Free(creationTicket);
+  return true;
+}
+
+static bool TPMStartup(Args &args, EsysCtx &esys) {
+  header(3, kTotalSteps, "TPM2_Startup (optiona)");
+  TSS2_RC s_rc = Esys_Startup(esys.ctx, TPM2_SU_CLEAR);
+  if (s_rc == TSS2_RC_SUCCESS) {
+    ok("TPM Startup(SU_CLEAR) Success");
+    return true;
+  } else {
+    warn(std::string("Startup returned: ") + Tss2_RC_Decode(s_rc));
+    kv("note", "Often means 'already started'. Continuing...");
+    return false;
+  }
 }
 
 static bool ConnectTPM(Args &args, std::string tctiConf, TctiCtx &tcti,
