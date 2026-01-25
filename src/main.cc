@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
     return 1;
   PauseIfNeeded(args.autoMode);
 
-  header(7, kTotalSteps, "Cleanup (Flush Context)");
+  header(kTotalSteps, kTotalSteps, "Cleanup (Flush Context)");
   if (!CheckRC(Esys_FlushContext(esys.ctx, childHandle),
                "Flust Context (Child)"))
     return 1;
