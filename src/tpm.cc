@@ -139,3 +139,64 @@ bool ConnectTPM(Args &args, std::string tctiConf, TctiCtx &tcti,
   ok("Esys Context Initialized");
   return true;
 }
+
+bool TPMCreateLoad(Args &args, EsysCtx &esys, ESYS_TR &primaryHandle,
+                   ESYS_TR sessionHandle, ESYS_TR &childHandle) {
+
+  TPM2B_SENSITIVE_CREATE childSensitive{};
+  childSensitive.size = 0;
+  childSensitive.sensitive.userAuth.size = 0;
+  childSensitive.sensitive.data.size = 0;
+
+  TPM2B_PUBLIC childPublic = MakeRSASigningChildTemplate();
+  TPM2B_DATA childOutsideInfo{};
+  childOutsideInfo.size = 0;
+  TPML_PCR_SELECTION childCreationPCR{};
+  childCreationPCR.count = 0;
+
+  TPM2B_PRIVATE *outPrivate = nullptr;
+  TPM2B_PUBLIC *outChildPublic = nullptr;
+  TPM2B_CREATION_DATA *outCreationData = nullptr;
+  TPM2B_DIGEST *outCreationHash = nullptr;
+  TPMT_TK_CREATION *outCreationTicket = nullptr;
+
+  if (!CheckRC(Esys_Create(esys.ctx, primaryHandle, sessionHandle, ESYS_TR_NONE,
+                           ESYS_TR_NONE, &childSensitive, &childPublic,
+                           &childOutsideInfo, &childCreationPCR, &outPrivate,
+                           &outChildPublic, &outCreationData, &outCreationHash,
+                           &outCreationTicket),
+               "Create"))
+    return false;
+
+  ok("TPM2_Create (child) Success");
+
+  childHandle = ESYS_TR_NONE;
+  if (!CheckRC(Esys_Load(esys.ctx, primaryHandle, sessionHandle, ESYS_TR_NONE,
+                         ESYS_TR_NONE, outPrivate, outChildPublic,
+                         &childHandle),
+               "Load"))
+    return false;
+  ok("TPM2_Load (child Success)");
+
+  {
+    std::ostringstream ch;
+    ch << "0x" << std::hex << childHandle << std::dec;
+    kv("Child Handle: ", ch.str());
+  }
+
+  if (outChildPublic) {
+    kv("child type", TPMAlgToString(outChildPublic->publicArea.type));
+    kv("child nameAlg", TPMAlgToString(outChildPublic->publicArea.nameAlg));
+    kv("child attributes",
+       TPMAObjectToString(outChildPublic->publicArea.objectAttributes));
+  }
+
+  // Free create outputs now that loaded
+  Esys_Free(outPrivate);
+  Esys_Free(outChildPublic);
+  Esys_Free(outCreationData);
+  Esys_Free(outCreationHash);
+  Esys_Free(outCreationTicket);
+
+  return true;
+}
