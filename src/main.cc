@@ -74,19 +74,19 @@ int main(int argc, char *argv[]) {
 
   header(kTotalSteps, kTotalSteps, "Cleanup (Flush Context)");
   if (!CheckRC(Esys_FlushContext(esys.ctx, childHandle),
-               "Flust Context (Child)"))
+               "Flush Context (Child)"))
     return 1;
-  ok("Flused Child Handle");
+  ok("Flushed Child Handle");
 
   if (!CheckRC(Esys_FlushContext(esys.ctx, primaryHandle),
-               "Flust Context (Primary)"))
+               "Flush Context (Primary)"))
     return 1;
-  ok("Flused Primary Handle");
+  ok("Flushed Primary Handle");
 
   if (!CheckRC(Esys_FlushContext(esys.ctx, sessionHandle),
-               "Flust Context (Primary)"))
+               "Flush Context (Primary)"))
     return 1;
-  ok("Flused Session Handle");
+  ok("Flushed Session Handle");
 
   return 0;
 }
